@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マインスイーパー</title>
+<style>
+  :root {
+    --bg: #eef1f5;
+    --panel: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --cell: #c7d2e0;
+    --cell-hover: #b6c3d4;
+    --open: #f8fafc;
+    --line: #dbe2ea;
+    --accent: #2563eb;
+    --mine-bg: #ef4444;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111827;
+      --panel: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --cell: #475569;
+      --cell-hover: #55657c;
+      --open: #273244;
+      --line: #334155;
+      --accent: #60a5fa;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 16px; letter-spacing: .05em; }
+  .levels { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; justify-content: center; }
+  .levels button {
+    font: inherit; font-size: .9rem;
+    padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    cursor: pointer;
+  }
+  .levels button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .game {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    max-width: 100%;
+  }
+  .hud {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; gap: 12px;
+  }
+  .counter {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 1.3rem; font-weight: 700;
+    min-width: 4.5ch; text-align: center;
+    padding: 4px 8px; border-radius: 6px;
+    background: #111; color: #f87171;
+  }
+  #face {
+    font-size: 1.6rem; line-height: 1;
+    width: 44px; height: 44px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); cursor: pointer;
+  }
+  #face:active { transform: scale(.94); }
+  .board-wrap { overflow-x: auto; max-width: calc(100vw - 56px); }
+  .board {
+    display: grid;
+    gap: 2px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  .cell {
+    width: var(--size); height: var(--size);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: calc(var(--size) * .55);
+    background: var(--cell); border-radius: 4px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cell:not(.open):hover { background: var(--cell-hover); }
+  .cell.open { background: var(--open); cursor: default; }
+  .cell.boom { background: var(--mine-bg); }
+  .cell.wrong { background: #fca5a5; }
+  .n1 { color: #2563eb; } .n2 { color: #16a34a; } .n3 { color: #dc2626; }
+  .n4 { color: #7c3aed; } .n5 { color: #b45309; } .n6 { color: #0891b2; }
+  .n7 { color: #374151; } .n8 { color: #6b7280; }
+  @media (prefers-color-scheme: dark) {
+    .n1 { color: #60a5fa; } .n2 { color: #4ade80; } .n3 { color: #f87171; }
+    .n4 { color: #c084fc; } .n5 { color: #fbbf24; } .n6 { color: #22d3ee; }
+    .n7 { color: #e5e7eb; } .n8 { color: #9ca3af; }
+  }
+  .message { min-height: 1.5em; margin: 12px 0 0; font-weight: 700; text-align: center; }
+  .controls {
+    margin-top: 12px; display: flex; gap: 12px; align-items: center; justify-content: center;
+  }
+  #modeBtn, #soundBtn {
+    font: inherit; font-size: .9rem; padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer;
+  }
+  #modeBtn.flag { background: #fde68a; color: #78350f; border-color: #f59e0b; }
+  .ranking {
+    margin: 8px auto 0; max-width: 280px; font-size: .9rem;
+    border-top: 1px solid var(--line); padding-top: 10px;
+  }
+  .ranking-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-weight: 700; margin-bottom: 6px;
+  }
+  #rankList { list-style: none; margin: 0; padding: 0; }
+  #rankList li {
+    display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; align-items: center;
+    padding: 4px 8px; border-radius: 6px; font-variant-numeric: tabular-nums;
+  }
+  #rankList li .time { font-weight: 700; }
+  #rankList li .date { color: var(--muted); font-size: .8rem; }
+  #rankList li.empty .time { color: var(--muted); font-weight: 400; }
+  #rankList li.new { background: #fde68a; color: #78350f; }
+  #rankList li.new .date { color: #92400e; }
+  #resetBest {
+    font: inherit; font-size: .75rem; padding: 2px 8px; border-radius: 6px;
+    border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .help { color: var(--muted); font-size: .85rem; line-height: 1.7; margin-top: 16px; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>💣 マインスイーパー</h1>
+
+  <div class="levels" id="levels">
+    <button data-level="easy" class="active">初級 9×9</button>
+    <button data-level="normal">中級 16×16</button>
+    <button data-level="hard">上級 30×16</button>
+  </div>
+
+  <div class="game">
+    <div class="hud">
+      <div class="counter" id="mines">010</div>
+      <button id="face" title="リスタート">🙂</button>
+      <div class="counter" id="timer">000</div>
+    </div>
+    <div class="board-wrap"><div class="board" id="board"></div></div>
+    <div class="controls">
+      <button id="modeBtn" title="タップ時の動作を切り替え">⛏️ 開くモード</button>
+      <button id="soundBtn" title="効果音のオン／オフ">🔊 音あり</button>
+    </div>
+    <p class="message" id="message"></p>
+    <div class="ranking">
+      <div class="ranking-head">
+        <span>🏆 ランキング（<span id="rankLevel">初級</span>）</span>
+        <button id="resetBest" title="この難易度の記録を消去">リセット</button>
+      </div>
+      <ol id="rankList"></ol>
+    </div>
+  </div>
+
+  <p class="help">
+    クリック：マスを開く ／ 右クリック・長押し：旗を立てる<br>
+    数字マスをクリック：周りの旗が数字と同じなら残りをまとめて開く<br>
+    最初の1手は必ず安全です
+  </p>
+
+<script>
+(() => {
+  const LEVELS = {
+    easy:   { cols: 9,  rows: 9,  mines: 10 },
+    normal: { cols: 16, rows: 16, mines: 40 },
+    hard:   { cols: 30, rows: 16, mines: 99 },
+  };
+
+  const boardEl = document.getElementById('board');
+  const minesEl = document.getElementById('mines');
+  const timerEl = document.getElementById('timer');
+  const faceEl = document.getElementById('face');
+  const msgEl = document.getElementById('message');
+  const modeBtn = document.getElementById('modeBtn');
+
+  let cfg, cells, firstClick, gameOver, flags, opened, timer, seconds, flagMode = false;
+
+  // ---- 効果音（Web Audio で合成） ----
+  const soundBtn = document.getElementById('soundBtn');
+  let audioCtx = null;
+  let muted = false;
+  try { muted = localStorage.getItem('ms-muted') === '1'; } catch (e) {}
+
+  function ctx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function tone(freq, dur, { type = 'sine', vol = 0.2, to = null, delay = 0 } = {}) {
+    if (muted) return;
+    const ac = ctx(); if (!ac) return;
+    const t = ac.currentTime + delay;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (to) osc.frequency.exponentialRampToValueAtTime(to, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  function noise(dur, { vol = 0.5, freq = 1200 } = {}) {
+    if (muted) return;
+    const ac = ctx(); if (!ac) return;
+    const t = ac.currentTime;
+    const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(freq, t);
+    filter.frequency.exponentialRampToValueAtTime(80, t + dur);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filter).connect(gain).connect(ac.destination);
+    src.start(t);
+  }
+
+  const sfx = {
+    open:    () => tone(720, 0.06, { type: 'triangle', vol: 0.18, to: 520 }),
+    cascade: () => [523, 659, 784, 1047].forEach((f, k) =>
+               tone(f, 0.08, { type: 'triangle', vol: 0.12, delay: k * 0.035 })),
+    flag:    () => tone(880, 0.09, { type: 'square', vol: 0.07, to: 1320 }),
+    unflag:  () => tone(700, 0.08, { type: 'square', vol: 0.06, to: 420 }),
+    boom:    () => { noise(0.9, { vol: 0.6 }); tone(140, 0.7, { type: 'sine', vol: 0.4, to: 40 }); },
+    win:     () => [523, 659, 784, 1047, 1319].forEach((f, k) =>
+               tone(f, k === 4 ? 0.5 : 0.15, { type: 'triangle', vol: 0.16, delay: k * 0.11 })),
+  };
+
+  function updateSoundBtn() {
+    soundBtn.textContent = muted ? '🔇 音なし' : '🔊 音あり';
+  }
+  soundBtn.addEventListener('click', () => {
+    muted = !muted;
+    try { localStorage.setItem('ms-muted', muted ? '1' : '0'); } catch (e) {}
+    updateSoundBtn();
+    if (!muted) sfx.open();
+  });
+  updateSoundBtn();
+
+  const pad = n => {
+    const s = String(Math.abs(n)).padStart(3, '0');
+    return n < 0 ? '-' + s.slice(-2) : s.slice(-3);
+  };
+
+  function neighbors(i) {
+    const x = i % cfg.cols, y = Math.floor(i / cfg.cols), out = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < cfg.cols && ny < cfg.rows) out.push(ny * cfg.cols + nx);
+    }
+    return out;
+  }
+
+  function cellSize() {
+    const avail = Math.min(window.innerWidth - 56, 900);
+    return Math.max(24, Math.min(36, Math.floor((avail - (cfg.cols - 1) * 2) / cfg.cols)));
+  }
+
+  function init(level) {
+    cfg = LEVELS[level];
+    clearInterval(timer);
+    timer = null; seconds = 0; flags = 0; opened = 0;
+    firstClick = true; gameOver = false;
+    timerEl.textContent = '000';
+    minesEl.textContent = pad(cfg.mines);
+    faceEl.textContent = '🙂';
+    msgEl.textContent = '';
+    showRanking();
+
+    boardEl.style.gridTemplateColumns = `repeat(${cfg.cols}, var(--size))`;
+    boardEl.style.setProperty('--size', cellSize() + 'px');
+    boardEl.innerHTML = '';
+    cells = [];
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < cfg.cols * cfg.rows; i++) {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      el.dataset.i = i;
+      frag.appendChild(el);
+      cells.push({ mine: false, open: false, flag: false, count: 0, el });
+    }
+    boardEl.appendChild(frag);
+  }
+
+  function placeMines(safe) {
+    // 初手のマスとその周囲には置かない
+    const banned = new Set([safe, ...neighbors(safe)]);
+    const candidates = [];
+    for (let i = 0; i < cells.length; i++) if (!banned.has(i)) candidates.push(i);
+    for (let k = 0; k < cfg.mines; k++) {
+      const r = k + Math.floor(Math.random() * (candidates.length - k));
+      [candidates[k], candidates[r]] = [candidates[r], candidates[k]];
+      cells[candidates[k]].mine = true;
+    }
+    cells.forEach((c, i) => { c.count = neighbors(i).filter(n => cells[n].mine).length; });
+  }
+
+  // ---- ランキング（難易度ごとに上位5件を localStorage へ保存） ----
+  const RANK_SIZE = 5;
+  const LEVEL_NAMES = { easy: '初級', normal: '中級', hard: '上級' };
+  const rankListEl = document.getElementById('rankList');
+  const rankLevelEl = document.getElementById('rankLevel');
+  let startTime = 0;
+
+  function loadRanks() {
+    let r = {};
+    try { r = JSON.parse(localStorage.getItem('ms-rank')) || {}; } catch (e) {}
+    // 旧形式（ベストタイムのみ）からの引き継ぎ
+    try {
+      const old = JSON.parse(localStorage.getItem('ms-best'));
+      if (old) {
+        for (const lv in old) {
+          if (!r[lv]) r[lv] = [{ time: old[lv], date: null }];
+        }
+        localStorage.setItem('ms-rank', JSON.stringify(r));
+        localStorage.removeItem('ms-best');
+      }
+    } catch (e) {}
+    return r;
+  }
+  function saveRanks(r) {
+    try { localStorage.setItem('ms-rank', JSON.stringify(r)); } catch (e) {}
+  }
+  function fmtDate(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  }
+  function showRanking(highlight = -1) {
+    const list = loadRanks()[currentLevel] || [];
+    rankLevelEl.textContent = LEVEL_NAMES[currentLevel];
+    rankListEl.innerHTML = '';
+    const medals = ['🥇', '🥈', '🥉', '4', '5'];
+    for (let k = 0; k < RANK_SIZE; k++) {
+      const e = list[k];
+      const li = document.createElement('li');
+      if (!e) li.className = 'empty';
+      if (k === highlight) li.className = 'new';
+      li.innerHTML = `<span>${medals[k]}</span>` +
+        `<span class="time">${e ? e.time.toFixed(2) + ' 秒' : '---'}</span>` +
+        `<span class="date">${e ? fmtDate(e.date) : ''}</span>`;
+      rankListEl.appendChild(li);
+    }
+  }
+  // 記録を追加し、入った順位（0始まり、圏外なら -1）を返す
+  function addRecord(time) {
+    const r = loadRanks();
+    const list = r[currentLevel] || [];
+    const entry = { time, date: Date.now() };
+    list.push(entry);
+    list.sort((a, b) => a.time - b.time);
+    r[currentLevel] = list.slice(0, RANK_SIZE);
+    saveRanks(r);
+    return r[currentLevel].indexOf(entry);
+  }
+  document.getElementById('resetBest').addEventListener('click', () => {
+    if (!confirm(`${LEVEL_NAMES[currentLevel]}のランキングを消去しますか？`)) return;
+    const r = loadRanks();
+    delete r[currentLevel];
+    saveRanks(r);
+    showRanking();
+  });
+
+  function startTimer() {
+    startTime = performance.now();
+    timer = setInterval(() => {
+      seconds = Math.min(999, seconds + 1);
+      timerEl.textContent = pad(seconds);
+    }, 1000);
+  }
+
+  function reveal(i) {
+    const stack = [i];
+    while (stack.length) {
+      const j = stack.pop();
+      const c = cells[j];
+      if (c.open || c.flag) continue;
+      c.open = true; opened++;
+      c.el.classList.add('open');
+      if (c.mine) { c.el.textContent = '💣'; continue; }
+      if (c.count) {
+        c.el.textContent = c.count;
+        c.el.classList.add('n' + c.count);
+      } else {
+        neighbors(j).forEach(n => { if (!cells[n].open) stack.push(n); });
+      }
+    }
+  }
+
+  function openCell(i) {
+    if (gameOver) return;
+    const c = cells[i];
+    if (c.flag) return;
+
+    if (firstClick) {
+      firstClick = false;
+      placeMines(i);
+      startTimer();
+    }
+
+    const before = opened;
+    if (c.open) {
+      // 数字マス：旗の数が一致すれば周囲を一括で開く
+      if (!c.count) return;
+      const ns = neighbors(i);
+      if (ns.filter(n => cells[n].flag).length !== c.count) return;
+      const targets = ns.filter(n => !cells[n].open && !cells[n].flag);
+      const hit = targets.find(n => cells[n].mine);
+      if (hit !== undefined) return lose(hit);
+      targets.forEach(reveal);
+    } else {
+      if (c.mine) return lose(i);
+      reveal(i);
+    }
+    if (checkWin()) return;
+    const diff = opened - before;
+    if (diff > 1) sfx.cascade();
+    else if (diff === 1) sfx.open();
+  }
+
+  function toggleFlag(i) {
+    if (gameOver) return;
+    const c = cells[i];
+    if (c.open) return;
+    c.flag = !c.flag;
+    flags += c.flag ? 1 : -1;
+    c.el.textContent = c.flag ? '🚩' : '';
+    minesEl.textContent = pad(cfg.mines - flags);
+    c.flag ? sfx.flag() : sfx.unflag();
+  }
+
+  function lose(i) {
+    gameOver = true;
+    clearInterval(timer);
+    faceEl.textContent = '😵';
+    msgEl.textContent = 'ドカーン！ ゲームオーバー';
+    sfx.boom();
+    cells.forEach((c, j) => {
+      if (c.mine && !c.flag) { c.el.classList.add('open'); c.el.textContent = '💣'; }
+      if (!c.mine && c.flag) { c.el.classList.add('wrong'); c.el.textContent = '❌'; }
+    });
+    cells[i].el.classList.add('boom');
+  }
+
+  function checkWin() {
+    if (opened !== cells.length - cfg.mines) return false;
+    gameOver = true;
+    sfx.win();
+    clearInterval(timer);
+    faceEl.textContent = '😎';
+    const time = Math.round((performance.now() - startTime) / 10) / 100;
+    const prevBest = (loadRanks()[currentLevel] || [])[0];
+    const rank = addRecord(time);
+    showRanking(rank);
+    if (rank === 0) {
+      msgEl.textContent = `🏆 新記録！ ${time.toFixed(2)} 秒` + (prevBest ? `（前回 ${prevBest.time.toFixed(2)} 秒）` : '');
+    } else if (rank > 0) {
+      msgEl.textContent = `クリア！ ${time.toFixed(2)} 秒で ${rank + 1} 位にランクイン 🎉`;
+    } else {
+      msgEl.textContent = `クリア！ タイム ${time.toFixed(2)} 秒 🎉`;
+    }
+    cells.forEach(c => { if (c.mine && !c.flag) { c.flag = true; c.el.textContent = '🚩'; } });
+    minesEl.textContent = pad(0);
+    return true;
+  }
+
+  // ---- 入力 ----
+  let pressTimer = null, longPressed = false;
+  const idxOf = e => {
+    const el = e.target.closest('.cell');
+    return el ? Number(el.dataset.i) : null;
+  };
+
+  boardEl.addEventListener('click', e => {
+    const i = idxOf(e);
+    if (i === null) return;
+    if (longPressed) { longPressed = false; return; }
+    if (flagMode && !cells[i].open) toggleFlag(i);
+    else openCell(i);
+  });
+
+  boardEl.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const i = idxOf(e);
+    if (i !== null && !longPressed) toggleFlag(i);
+  });
+
+  boardEl.addEventListener('touchstart', e => {
+    const i = idxOf(e);
+    if (i === null) return;
+    longPressed = false;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      toggleFlag(i);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 400);
+  }, { passive: true });
+  const cancelPress = () => clearTimeout(pressTimer);
+  boardEl.addEventListener('touchend', cancelPress);
+  boardEl.addEventListener('touchmove', cancelPress);
+
+  boardEl.addEventListener('mousedown', e => {
+    if (!gameOver && e.button === 0 && idxOf(e) !== null) faceEl.textContent = '😮';
+  });
+  document.addEventListener('mouseup', () => { if (!gameOver) faceEl.textContent = '🙂'; });
+
+  let currentLevel = 'easy';
+  document.getElementById('levels').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('active', b === btn));
+    currentLevel = btn.dataset.level;
+    init(currentLevel);
+  });
+
+  faceEl.addEventListener('click', () => init(currentLevel));
+
+  modeBtn.addEventListener('click', () => {
+    flagMode = !flagMode;
+    modeBtn.classList.toggle('flag', flagMode);
+    modeBtn.textContent = flagMode ? '🚩 旗モード' : '⛏️ 開くモード';
+  });
+
+  window.addEventListener('resize', () => boardEl.style.setProperty('--size', cellSize() + 'px'));
+
+  init(currentLevel);
+})();
+</script>
+</body>
+</html>
